@@ -815,7 +815,7 @@ CONFIG_SPI_SLAVE_ISR_IN_IRAM=y
 #
 # ESP-Driver:Temperature Sensor Configurations
 #
-# CONFIG_TEMP_SENSOR_ENABLE_DEBUG_LOG is not set
+CONFIG_TEMP_SENSOR_ENABLE_DEBUG_LOG=y
 # end of ESP-Driver:Temperature Sensor Configurations
 
 #
