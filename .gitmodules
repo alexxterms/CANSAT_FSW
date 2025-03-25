@@ -1,0 +1,3 @@
+[submodule "lib/bmx280"]
+	path = lib/bmx280
+	url = https://github.com/utkumaden/esp-idf-bmx280.git
