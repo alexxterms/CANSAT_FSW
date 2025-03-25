@@ -68,6 +68,7 @@
 #define BMP280_ID1 0x57
 // Value of REG_CHPID for BMP280 (Production)
 #define BMP280_ID2 0x58
+#define CONFIG_BMX280_TIMEOUT 1000
 
 struct bmx280_t{
     #if !(CONFIG_USE_I2C_MASTER_DRIVER)
