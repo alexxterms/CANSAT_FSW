@@ -1,3 +1,13 @@
+
+/*Things to do : Complete GPS TASK --> Test
+                 Complete MICS Task --> Test
+                 Try reading different gases from MICS --> Test
+                 Complete SD Logging --> Test
+                 Test SENSORS altogether 
+                 Start LoRa Packeting 
+                 --> Optimize Optimize Optimize
+*/
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -177,7 +187,7 @@ static void imu_task(void *arg) {
     vTaskDelete(NULL);
 }
 
-// ################################################ MPU PROCESS ENDS HERE ######################################################
+// ################################################ BME PROCESS STARTS HERE ######################################################
 
 
 
