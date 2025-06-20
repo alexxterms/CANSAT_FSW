@@ -1,8 +1,8 @@
-#include "mics5524.h"
+/*#include "mics5524.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-/*void app_main() {
+void app_main() {
     printf("Initializing MICS5524...\n");
     mics5524_init();
 

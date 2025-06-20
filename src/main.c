@@ -28,7 +28,7 @@
 #include "calibrate.h"
 #include "common.h"
 #include <math.h>  // Needed for M_PI
-
+#include "mics5524.h"
 #include "bmx280.h"
 
 #define DEG2RAD(x) ((x) * M_PI / 180.0)
@@ -62,8 +62,10 @@ typedef struct {
 
 SensorData sensorData;
 
+static float previousAltitude = 0;
 
-// ########################################### MPU PROCESS STARTS HERE ###################################################
+
+// --------------------------------------------> MPU PROCESS STARTS HERE <--------------------------------------------------------
 
 #define I2C_MASTER_NUM I2C_NUM_0 /*!< I2C port number for master dev */
 #define SAMPLE_FREQ_Hz 100.0
@@ -173,7 +175,7 @@ void run_imu(void)
 // all the imu (mpu9250) process goes here
 static void imu_task(void *arg) {
 #ifdef CONFIG_CALIBRATION_MODE
-    ESP_LOGI(TAGB, "Entering calibration mode...");
+    ESP_LOGI(TAGM, "Entering calibration mode...");
     calibrate_gyro();
     calibrate_accel();
     calibrate_mag();
@@ -183,16 +185,16 @@ static void imu_task(void *arg) {
 
     // Cleanup resources before deleting the task
     i2c_driver_delete(I2C_MASTER_NUM);
-    ESP_LOGI(TAGB, "IMU Task exited.");
+    ESP_LOGI(TAGM, "IMU Task exited.");
     vTaskDelete(NULL);
 }
 
-// ################################################ BME PROCESS STARTS HERE ######################################################
+// ----------------------------------------> BME PROCESS STARTS HERE <-------------------------------------
 
 
 
-#define BMX280_SDA_NUM GPIO_NUM_13
-#define BMX280_SCL_NUM GPIO_NUM_14
+#define BMX280_SDA_NUM GPIO_NUM_8
+#define BMX280_SCL_NUM GPIO_NUM_9
 #define BMX280_I2C_PORT I2C_NUM_0
 
 static const char* TAGB = "BME280";
@@ -252,22 +254,29 @@ void barometer_task(void *arg) {
 // all the gps process goes here
 void gps_task(void *pvParameters) {
     while (1) {
-        sensorData.latitude = get_latitude();
-        sensorData.longitude = get_longitude();
+     //   sensorData.latitude = get_latitude();
+      //  sensorData.longitude = get_longitude();
 
         vTaskDelay(1000 / portTICK_PERIOD_MS); // 1Hz
     }
 }
 
-// all the mics5524 process goes here
+// ----------------------------------------> MICS PROCESS STARTS HERE <-------------------------------------
+
+static const char *TAGG = "GAS_TASK";
+
 void gas_sensor_task(void *pvParameters) {
-    while (1) {
-        sensorData.gas_level = get_gas_level();
+    mics5524_init();
 
-        vTaskDelay(1000 / portTICK_PERIOD_MS); // 1Hz
+    while (1) {
+        float gas_value = mics5524_read();
+
+        // Store gas value in shared sensorData struct
+        sensorData.gas_level = gas_value;
+        ESP_LOGI(TAGG, "Value: %.2f", gas_value);
+        vTaskDelay(1000 / portTICK_PERIOD_MS);  // 1Hz
     }
 }
-
 
 // This is logic for flight state change
 void update_flight_state(float acceleration, float altitude, float velocity) {
@@ -303,9 +312,9 @@ void update_flight_state(float acceleration, float altitude, float velocity) {
 }
 
  // this will manage flight states
-void state_management_task(void *pvParameters) {
+/*void state_management_task(void *pvParameters) {
     while (1) {
-        float accel = get_acceleration();
+        float accel = sensorData.ac;
         float altitude = get_altitude();
         float velocity = get_velocity();
         
@@ -314,24 +323,12 @@ void state_management_task(void *pvParameters) {
         vTaskDelay(100 / portTICK_PERIOD_MS); 
     }
 }
-
+*/
 
 void app_main() {
     
-    imu_init();
-    barometer_init();
-    gps_init();
-    sd_card_init();
-    lora_init();
-
-    // tasks are created here 
-    xTaskCreatePinnedToCore(imu_task, "IMU Task", 4096, NULL, 5, NULL, 1);
     xTaskCreatePinnedToCore(barometer_task, "Barometer Task", 4096, NULL, 5, NULL, 1);
-    xTaskCreatePinnedToCore(&gps_task, "GPS Task", 4096, NULL, 3, NULL, 1);
-    xTaskCreatePinnedToCore(&battery_task, "Battery Task", 2048, NULL, 2, NULL, 1);
-    xTaskCreatePinnedToCore(&gas_sensor_task, "Gas Sensor Task", 2048, NULL, 2, NULL, 1);
 
-    xTaskCreatePinnedToCore(&state_management_task, "State Management", 4096, NULL, 5, NULL, 0);
-    xTaskCreatePinnedToCore(&sd_logging_task, "SD Card Logging", 4096, NULL, 3, NULL, 0);
-    xTaskCreatePinnedToCore(&lora_communication_task, "LoRa Task", 4096, NULL, 3, NULL, 0);
+    xTaskCreatePinnedToCore(imu_task, "IMU Task", 4096, NULL, 5, NULL, 1);
+    xTaskCreatePinnedToCore(&gas_sensor_task, "Gas Sensor Task", 4096, NULL, 2, NULL, 1);
 }    

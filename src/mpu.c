@@ -15,7 +15,7 @@
  *  limitations under the License.                                           *
  *                                                                           *
  *****************************************************************************/
-
+/*
  #include <stdio.h>
  #include <string.h>
  #include <stdlib.h>
@@ -41,10 +41,10 @@
 
  
  static const char *TAG = "main";
- 
- #define I2C_MASTER_NUM I2C_NUM_0 /*!< I2C port number for master dev */
- #define SAMPLE_FREQ_Hz 100.0
-
+ */
+ //#define I2C_MASTER_NUM I2C_NUM_0 /*!< I2C port number for master dev */
+ //#define SAMPLE_FREQ_Hz 100.0
+/*
  calibration_t cal = {
      .mag_offset = {.x = 25.183594, .y = 57.519531, .z = -62.648438},
      .mag_scale = {.x = 1.513449, .y = 1.557811, .z = 1.434039},
@@ -53,7 +53,7 @@
      .accel_scale_hi = {.x = 1.013558, .y = 1.011903, .z = 1.019645},
  
      .gyro_bias_offset = {.x = 0.303956, .y = -1.049768, .z = -0.403782}};
- 
+ */
  /**
   * Transformation:
   *  - Rotate around Z axis 180 degrees
@@ -61,7 +61,7 @@
   * @param  {object} s {x,y,z} sensor
   * @return {object}   {x,y,z} transformed
   */
- static void transform_accel_gyro(vector_t *v)
+ /*static void transform_accel_gyro(vector_t *v)
  {
    float x = v->x;
    float y = v->y;
@@ -71,13 +71,13 @@
    v->y = -z;
    v->z = -y;
  }
- 
+ */
  /**
   * Transformation: to get magnetometer aligned
   * @param  {object} s {x,y,z} sensor
   * @return {object}   {x,y,z} transformed
   */
- static void transform_mag(vector_t *v)
+ /*static void transform_mag(vector_t *v)
  {
    float x = v->x;
    float y = v->y;
@@ -87,7 +87,8 @@
    v->y = z;
    v->z = -x;
  }
- 
+ */
+ /*
  void run_imu(void)
  {
  
@@ -130,8 +131,8 @@
 
    }
  }
- 
- static void imu_task(void *arg)
+ */
+/* static void imu_task(void *arg)
  {
  
  #ifdef CONFIG_CALIBRATION_MODE
@@ -148,7 +149,7 @@
  
    vTaskDelete(NULL);
  }
- 
+ */
  /*void app_main(void)
  {
    // start i2c task

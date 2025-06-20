@@ -1,4 +1,4 @@
-#include <stdio.h>
+/*#include <stdio.h>
 #include "driver/uart.h"
 #include "esp_log.h"
 
@@ -21,7 +21,7 @@ void gps_task(void *arg) {
         }
     }
 }
-
+*/
 /*void app_main(void) {
     // Configure UART
     uart_config_t uart_config = {

@@ -47,7 +47,7 @@
  */
 esp_err_t i2c_master_init(uint8_t i2c_num, uint8_t gpio_sda, uint8_t gpio_scl)
 {
-  int i2c_master_port = i2c_num;
+  /*int i2c_master_port = i2c_num;
   i2c_config_t conf;
   memset(&conf, 0, sizeof(i2c_config_t));
   conf.mode = I2C_MODE_MASTER;
@@ -58,6 +58,7 @@ esp_err_t i2c_master_init(uint8_t i2c_num, uint8_t gpio_sda, uint8_t gpio_scl)
   conf.master.clk_speed = I2C_FREQ_HZ;
   ESP_ERROR_CHECK(i2c_param_config(i2c_master_port, &conf));
   ESP_ERROR_CHECK(i2c_driver_install(i2c_master_port, conf.mode,I2C_RX_BUF_DISABLE, I2C_TX_BUF_DISABLE,0));
+  */
   return ESP_OK;
 }
 
