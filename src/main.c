@@ -1,4 +1,3 @@
-
 /*Things to do : Complete GPS TASK --> Test
                  Complete MICS Task --> Test
                  Try reading different gases from MICS --> Test
@@ -30,6 +29,7 @@
 #include <math.h>  // Needed for M_PI
 #include "mics5524.h"
 #include "bmx280.h"
+#include "communications.h"
 
 #define DEG2RAD(x) ((x) * M_PI / 180.0)
 
@@ -49,14 +49,14 @@ FlightState currentState = PRE_LAUNCH;
 // sensor data struct for other tasks to munch on
 typedef struct {
     float roll, pitch, yaw;  
-    float ax, ay, az;        
-    float gx, gy, gz;       
-    float mx, my, mz;       
-    float altitude, pressure;
-    float voltage;
-    float latitude, longitude;
-    float gas_level;
-    float temperature;
+    float ax, ay, az;  //Acceleration    
+    float gx, gy, gz;  //Gyroscope
+    float mx, my, mz;  // Magnetometer
+    float altitude, pressure;  // Barometer
+    float voltage;  //Voltage
+    float latitude, longitude;  // GPS
+    float gas_level;  // Gas sensor reading
+    float temperature;  
     float humidity;
 } SensorData;
 
@@ -250,16 +250,43 @@ void barometer_task(void *arg) {
         vTaskDelay(pdMS_TO_TICKS(1000)); // 1 second delay
     }
 }
-
+static const char *TAG_GPS = "GPS";
+static const char *TAG_VOLTAGE = "VOLT";
+static const char *TAG_RW = "RW";
 // all the gps process goes here
 void gps_task(void *pvParameters) {
     while (1) {
      //   sensorData.latitude = get_latitude();
       //  sensorData.longitude = get_longitude();
+      float latitude = 19.0760 + ((esp_random() % 1000) / 100000.0);  // ~19.0760xx
+      float longitude = 72.8777 + ((esp_random() % 1000) / 100000.0); // ~72.8777xx
+      float altitude = 473;  // 50 to 150 meters
 
+      ESP_LOGI(TAG_GPS, "Lat: %.5f, Lon: %.5f, Alt: %.2f m", latitude, longitude, altitude);
         vTaskDelay(1000 / portTICK_PERIOD_MS); // 1Hz
     }
 }
+
+void voltage_task(void *pvParameters) {
+    while (1) {
+        float voltage = 7.4 + ((esp_random() % 100) / 100.0);  // 7.4V to 8.4V
+
+        ESP_LOGI(TAG_VOLTAGE, "Voltage: %.2f V", voltage);
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+    }
+}
+
+void reaction_wheel_task(void *pvParameters) {
+    while (1) {
+        int rpm1 = 160;
+        int rpm2 = 148;
+
+        ESP_LOGI(TAG_RW, "RW1: %d RPM | RW2: %d RPM", rpm1, rpm2);
+        vTaskDelay(500 / portTICK_PERIOD_MS);
+
+    }
+}
+
 
 // ----------------------------------------> MICS PROCESS STARTS HERE <-------------------------------------
 
@@ -324,11 +351,70 @@ void update_flight_state(float acceleration, float altitude, float velocity) {
     }
 }
 */
+/////FAKE
+
+static const char *TAG_COMMS = "COMMS_TASK";
+
+void comms_task(void *pvParameters) {
+    uint8_t tx_buffer[512]; // Combined packet buffer
+    size_t tx_offset = 0;
+
+    uint16_t packet_counter = 0;
+
+    while (1) {
+        tx_offset = 0; // Reset offset for each new transmission
+
+        /* === Identification Packet === */
+        IdentificationPacket id_packet = {
+            .team_id = "TEAM1234",
+            .timestamp = esp_log_timestamp(),
+            .packet_id = packet_counter++,
+            .source = 0x01,
+            .destination = 0x02
+        };
+        tx_offset += build_identification_packet(&tx_buffer[tx_offset], &id_packet);
+
+        /* === Environmental Packet === */
+        EnvironmentalPacket env_packet = {
+            .message_id = MSG_ID_ENVIRONMENTAL,
+            .altitude    = (uint16_t)(sensorData.altitude * 10),   // dm
+            .temperature = (uint16_t)(sensorData.temperature * 100), // centi-degrees
+            .pressure    = (uint16_t)(sensorData.pressure / 10),   // deca-Pa
+            .humidity    = (uint16_t)(sensorData.humidity * 100),  // centi-%
+            .gas_sensor  = (uint16_t)(sensorData.gas_level * 100)  // scaled gas
+        };
+        tx_offset += build_environmental_packet(&tx_buffer[tx_offset], &env_packet);
+
+        /* === Accelerometer Packet === */
+        int16_t ax = (int16_t)(sensorData.ax * 1000); // milli-g
+        int16_t ay = (int16_t)(sensorData.ay * 1000);
+        int16_t az = (int16_t)(sensorData.az * 1000);
+        tx_offset += build_accel_packet(&tx_buffer[tx_offset], ax, ay, az);
+
+        /* === Gyroscope Packet === */
+        int16_t gx = (int16_t)(sensorData.gx * 1000); // milli-deg/s
+        int16_t gy = (int16_t)(sensorData.gy * 1000);
+        int16_t gz = (int16_t)(sensorData.gz * 1000);
+        tx_offset += build_gyro_packet(&tx_buffer[tx_offset], gx, gy, gz);
+
+        /* === Add other packets here === */
+        // GNSS, battery, PWM, signal data, etc.
+
+        /* === Send Combined Packets === */
+        send_combined_packets(tx_buffer, tx_offset);
+
+        ESP_LOGI(TAG_COMMS, "Sent %d bytes of telemetry", tx_offset);
+
+        vTaskDelay(pdMS_TO_TICKS(1000)); // 1 Hz rate
+    }
+}
 
 void app_main() {
-    
     xTaskCreatePinnedToCore(barometer_task, "Barometer Task", 4096, NULL, 5, NULL, 1);
-
     xTaskCreatePinnedToCore(imu_task, "IMU Task", 4096, NULL, 5, NULL, 1);
-    xTaskCreatePinnedToCore(&gas_sensor_task, "Gas Sensor Task", 4096, NULL, 2, NULL, 1);
-}    
+    xTaskCreatePinnedToCore(gas_sensor_task, "Gas Sensor Task", 4096, NULL, 2, NULL, 1);
+    xTaskCreatePinnedToCore(gps_task, "GPS Task", 4096, NULL, 3, NULL, 1);
+    xTaskCreatePinnedToCore(voltage_task, "Voltage Task", 2048, NULL, 2, NULL, 1);
+    xTaskCreatePinnedToCore(reaction_wheel_task, "RW Task", 4096, NULL, 3, NULL, 1);
+    xTaskCreatePinnedToCore(comms_task, "Comms Task", 4096, NULL, 4, NULL, 1);
+}

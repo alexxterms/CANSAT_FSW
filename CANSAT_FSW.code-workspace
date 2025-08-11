@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "CANSAT_TESTINIG",
+			"path": "../CANSAT_TESTINIG"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"stdlib.h": "c"
+		}
+	}
+}
