@@ -1,5 +1,4 @@
 /*Things to do : Complete GPS TASK --> Test
-                 Complete MICS Task --> Test
                  Try reading different gases from MICS --> Test
                  Complete SD Logging --> Test
                  Test SENSORS altogether 
@@ -30,6 +29,7 @@
 #include "mics5524.h"
 #include "bmx280.h"
 #include "communications.h"
+#include "gps.h" // Include the header for gps_task
 
 #define DEG2RAD(x) ((x) * M_PI / 180.0)
 
@@ -254,18 +254,7 @@ static const char *TAG_GPS = "GPS";
 static const char *TAG_VOLTAGE = "VOLT";
 static const char *TAG_RW = "RW";
 // all the gps process goes here
-void gps_task(void *pvParameters) {
-    while (1) {
-     //   sensorData.latitude = get_latitude();
-      //  sensorData.longitude = get_longitude();
-      float latitude = 19.0760 + ((esp_random() % 1000) / 100000.0);  // ~19.0760xx
-      float longitude = 72.8777 + ((esp_random() % 1000) / 100000.0); // ~72.8777xx
-      float altitude = 473;  // 50 to 150 meters
 
-      ESP_LOGI(TAG_GPS, "Lat: %.5f, Lon: %.5f, Alt: %.2f m", latitude, longitude, altitude);
-        vTaskDelay(1000 / portTICK_PERIOD_MS); // 1Hz
-    }
-}
 
 void voltage_task(void *pvParameters) {
     while (1) {
@@ -397,6 +386,48 @@ void comms_task(void *pvParameters) {
         int16_t gz = (int16_t)(sensorData.gz * 1000);
         tx_offset += build_gyro_packet(&tx_buffer[tx_offset], gx, gy, gz);
 
+        gps_fix_t fix;
+        if (gps_get_fix(&fix)) {
+            /* === GGA Packet === */
+            uint8_t utc_time[3] = { fix.hh, fix.mm, fix.ss };
+            float latitude  = fix.lat_e7 / 1e7f;
+            float longitude = fix.lon_e7 / 1e7f;
+            bool lat_dir = (latitude >= 0);
+            bool lon_dir = (longitude >= 0);
+            uint8_t fix_status = fix.fix_quality;   // 0=no fix, 1=GPS, 2=DGPS, etc.
+            uint16_t hdop = fix.hdop_x100 / 10;     // scale down to deci-units if needed
+            uint8_t sats_used = fix.sats;
+            int32_t altitude_mm = fix.alt_cm * 10;  // cm → mm
+
+        tx_offset += build_gga_packet(
+            &tx_buffer[tx_offset],
+            utc_time,
+            fabsf(latitude), lat_dir,
+            fabsf(longitude), lon_dir,
+            fix_status,
+            hdop,
+            sats_used,
+            altitude_mm
+        );
+
+        /* === GSV Packet === */
+        // Right now we only have "sats used" from GGA, not "sats in view" from GSV
+        uint8_t sats_in_view = fix.sats;
+        uint16_t snr = 0;      // We’d need GSV parsing to get this
+        uint16_t signal_id = 1; // Placeholder
+
+        tx_offset += build_gsv_packet(
+            &tx_buffer[tx_offset],
+            sats_in_view,
+            snr,
+            signal_id
+        );
+    }
+
+
+
+   
+
         /* === Add other packets here === */
         // GNSS, battery, PWM, signal data, etc.
 
@@ -410,10 +441,12 @@ void comms_task(void *pvParameters) {
 }
 
 void app_main() {
+    gps_init(); // Initialize the GPS module once during setup
+
     xTaskCreatePinnedToCore(barometer_task, "Barometer Task", 4096, NULL, 5, NULL, 1);
     xTaskCreatePinnedToCore(imu_task, "IMU Task", 4096, NULL, 5, NULL, 1);
     xTaskCreatePinnedToCore(gas_sensor_task, "Gas Sensor Task", 4096, NULL, 2, NULL, 1);
-    xTaskCreatePinnedToCore(gps_task, "GPS Task", 4096, NULL, 3, NULL, 1);
+    xTaskCreatePinnedToCore(gps_task, "gps_task", 4096, NULL, 4, NULL, 1);
     xTaskCreatePinnedToCore(voltage_task, "Voltage Task", 2048, NULL, 2, NULL, 1);
     xTaskCreatePinnedToCore(reaction_wheel_task, "RW Task", 4096, NULL, 3, NULL, 1);
     xTaskCreatePinnedToCore(comms_task, "Comms Task", 4096, NULL, 4, NULL, 1);
