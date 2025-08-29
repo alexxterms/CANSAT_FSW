@@ -20,6 +20,7 @@
 #include "esp_task_wdt.h"
 
 #include "driver/i2c.h"
+#include "driver/uart.h" // Add this include for UART_NUM_0
 
 #include "ahrs.h"
 #include "mpu9250.h"
@@ -347,7 +348,6 @@ static const char *TAG_COMMS = "COMMS_TASK";
 void comms_task(void *pvParameters) {
     uint8_t tx_buffer[512]; // Combined packet buffer
     size_t tx_offset = 0;
-
     uint16_t packet_counter = 0;
 
     while (1) {
@@ -372,7 +372,7 @@ void comms_task(void *pvParameters) {
             .humidity    = (uint16_t)(sensorData.humidity * 100),  // centi-%
             .gas_sensor  = (uint16_t)(sensorData.gas_level * 100)  // scaled gas
         };
-        tx_offset += build_environmental_packet(&tx_buffer[tx_offset], &env_packet);
+        tx_offset += format_environmental_packet(&tx_buffer[tx_offset], &env_packet);
 
         /* === Accelerometer Packet === */
         int16_t ax = (int16_t)(sensorData.ax * 1000); // milli-g
@@ -386,6 +386,7 @@ void comms_task(void *pvParameters) {
         int16_t gz = (int16_t)(sensorData.gz * 1000);
         tx_offset += build_gyro_packet(&tx_buffer[tx_offset], gx, gy, gz);
 
+        /* === GPS Data === */
         gps_fix_t fix;
         if (gps_get_fix(&fix)) {
             /* === GGA Packet === */
@@ -394,45 +395,33 @@ void comms_task(void *pvParameters) {
             float longitude = fix.lon_e7 / 1e7f;
             bool lat_dir = (latitude >= 0);
             bool lon_dir = (longitude >= 0);
-            uint8_t fix_status = fix.fix_quality;   // 0=no fix, 1=GPS, 2=DGPS, etc.
-            uint16_t hdop = fix.hdop_x100 / 10;     // scale down to deci-units if needed
+            uint8_t fix_status = fix.fix_quality;
+            uint16_t hdop = fix.hdop_x100 / 10;
             uint8_t sats_used = fix.sats;
-            int32_t altitude_mm = fix.alt_cm * 10;  // cm → mm
+            int32_t altitude_mm = fix.alt_cm * 10;
 
-        tx_offset += build_gga_packet(
-            &tx_buffer[tx_offset],
-            utc_time,
-            fabsf(latitude), lat_dir,
-            fabsf(longitude), lon_dir,
-            fix_status,
-            hdop,
-            sats_used,
-            altitude_mm
-        );
+            tx_offset += build_gga_packet(
+                &tx_buffer[tx_offset],
+                utc_time,
+                fabsf(latitude), lat_dir,
+                fabsf(longitude), lon_dir,
+                fix_status,
+                hdop,
+                sats_used,
+                altitude_mm
+            );
 
-        /* === GSV Packet === */
-        // Right now we only have "sats used" from GGA, not "sats in view" from GSV
-        uint8_t sats_in_view = fix.sats;
-        uint16_t snr = 0;      // We’d need GSV parsing to get this
-        uint16_t signal_id = 1; // Placeholder
-
-        tx_offset += build_gsv_packet(
-            &tx_buffer[tx_offset],
-            sats_in_view,
-            snr,
-            signal_id
-        );
-    }
-
-
-
-   
-
-        /* === Add other packets here === */
-        // GNSS, battery, PWM, signal data, etc.
+            /* === GSV Packet with Satellite Data === */
+            satellite_info_t satellite_data[MAX_SATS];
+            int satellite_count = gps_get_satellites(satellite_data, MAX_SATS);
+            if (satellite_count > 0) {
+                tx_offset += build_gsv_packet(&tx_buffer[tx_offset], satellite_count, satellite_data, satellite_count);
+            }
+        }
 
         /* === Send Combined Packets === */
-        send_combined_packets(tx_buffer, tx_offset);
+        // Send the buffer directly via UART
+        uart_write_bytes(UART_NUM_0, tx_buffer, tx_offset);
 
         ESP_LOGI(TAG_COMMS, "Sent %d bytes of telemetry", tx_offset);
 

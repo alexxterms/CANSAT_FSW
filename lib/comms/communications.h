@@ -20,7 +20,8 @@
 #define TEAM_ID_MAX_LEN 16
 #define COMM_BUFFER_SIZE 128
 #define ACCEL_PACKET_SIZE 7
-#define GYRO_PACKET_SIZE  7
+#define GYRO_PACKET_SIZE   7
+#define MAX_SATS 32
 
 // Structures
 typedef struct {
@@ -30,7 +31,6 @@ typedef struct {
     uint8_t source;
     uint8_t destination;
 } IdentificationPacket;
-
 
 // Environmental packet struct
 typedef struct {
@@ -42,6 +42,14 @@ typedef struct {
     uint16_t gas_sensor;    // scaled value
 } __attribute__((packed)) EnvironmentalPacket;
 
+// Satellite information structure
+typedef struct {
+    int prn;
+    int elevation;
+    int azimuth;
+    int snr;
+} satellite_info_t;
+
 size_t format_environmental_packet(uint8_t *buffer, EnvironmentalPacket *data);
 
 // Function declarations
@@ -50,7 +58,7 @@ void comms_parser(const uint8_t *data, uint16_t length);
 size_t build_accel_packet(uint8_t *buffer, int16_t x_accel, int16_t y_accel, int16_t z_accel);
 size_t build_gyro_packet(uint8_t *buffer, int16_t x_rate, int16_t y_rate, int16_t z_rate);
 size_t build_gga_packet(uint8_t *buffer, uint8_t utc_time[3], float latitude, bool latitude_dir, float longitude, bool longitude_dir, uint8_t fix_status, uint16_t hdop, uint8_t satellites_used, int32_t altitude);
-size_t build_gsv_packet(uint8_t *buffer, uint8_t satellites_in_view, uint16_t snr, uint16_t signal_id);
+size_t build_gsv_packet(uint8_t *buffer, uint8_t satellites_in_view, satellite_info_t *satellite_data, int satellite_count);
 size_t build_battery_packet(uint8_t *buffer, uint16_t current_voltage);
 size_t build_system_status_packet(uint8_t *buffer, uint8_t sensor_status, uint32_t uptime, uint8_t mission_phase, const char *reboot_reason, uint8_t system_time[3]);
 size_t build_pwm_packet(uint8_t *buffer, uint16_t servo_pwm[5], uint16_t esc_pwm[2]);

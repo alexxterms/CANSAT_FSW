@@ -1,4 +1,5 @@
 #include "communications.h"
+#include "gps.h" // Include GPS header for satellite_info_t
 #include <string.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -121,19 +122,23 @@ size_t build_gga_packet(uint8_t *buffer, uint8_t utc_time[3], float latitude, bo
     return 22; // Total bytes written
 }
 
-size_t build_gsv_packet(uint8_t *buffer, uint8_t satellites_in_view, uint16_t snr, uint16_t signal_id) {
+size_t build_gsv_packet(uint8_t *buffer, uint8_t satellites_in_view, satellite_info_t *satellite_data, int satellite_count) {
     buffer[0] = 0xAB; // Message ID for GSV
 
     // Satellites in View
     buffer[1] = satellites_in_view;
 
-    // SNR
-    put_uint16_le(&buffer[2], snr);
+    // Add satellite information
+    size_t index = 2;
+    int max_satellites = (satellite_count < MAX_SATS) ? satellite_count : MAX_SATS;
+    for (int i = 0; i < max_satellites; i++) {
+        buffer[index++] = (uint8_t)satellite_data[i].prn;
+        buffer[index++] = (uint8_t)satellite_data[i].elevation;
+        buffer[index++] = (uint8_t)satellite_data[i].azimuth;
+        buffer[index++] = (uint8_t)satellite_data[i].snr;
+    }
 
-    // Signal ID
-    put_uint16_le(&buffer[4], signal_id);
-
-    return 6; // Total bytes written
+    return index; // Total bytes written
 }
 
 size_t build_battery_packet(uint8_t *buffer, uint16_t current_voltage) {

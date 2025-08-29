@@ -1,5 +1,5 @@
 #include "gps.h"
-
+#include "esp_err.h" // Add this include for esp_err_t
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -340,4 +340,54 @@ bool gps_get_fix(gps_fix_t *out) {
         valid = g_fix.valid;
     }
     return valid;
+}
+
+// Return number of satellites in view and copy info into provided buffer.
+// Returns actual count copied (<= max).
+int gps_get_satellites(satellite_info_t *out, int max) {
+    if (!out || max <= 0) return 0;
+    int copied = 0;
+
+    if (g_fix_mux && xSemaphoreTake(g_fix_mux, pdMS_TO_TICKS(20)) == pdTRUE) {
+        copied = (g_sats_in_view < max) ? g_sats_in_view : max;
+        memcpy(out, g_sats, copied * sizeof(satellite_info_t));
+        xSemaphoreGive(g_fix_mux);
+    } else {
+        copied = (g_sats_in_view < max) ? g_sats_in_view : max;
+        memcpy(out, g_sats, copied * sizeof(satellite_info_t));
+    }
+
+    return copied;
+}
+
+// Compatibility function for main.c
+esp_err_t gps_get_data(GPSData *data) {
+    if (!data) return ESP_ERR_INVALID_ARG;
+    
+    gps_fix_t fix;
+    bool valid = gps_get_fix(&fix);
+    
+    // Convert from gps_fix_t to GPSData format
+    data->utc_time[0] = fix.hh;
+    data->utc_time[1] = fix.mm; 
+    data->utc_time[2] = fix.ss;
+    
+    data->latitude = (float)(fix.lat_e7 / 1e7);
+    data->latitude_dir = (fix.lat_e7 >= 0);
+    
+    data->longitude = (float)(fix.lon_e7 / 1e7);
+    data->longitude_dir = (fix.lon_e7 >= 0);
+    
+    data->fix_status = fix.fix_quality;
+    data->hdop = fix.hdop_x100;
+    data->satellites_used = fix.sats;
+    data->altitude = fix.alt_cm;
+    
+    return valid ? ESP_OK : ESP_ERR_NOT_FOUND;
+}
+
+// Initialize GPS (for compatibility)
+void gps_init(void) {
+    // GPS initialization is handled in gps_task
+    // This function exists for compatibility with main.c
 }
