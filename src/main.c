@@ -439,4 +439,5 @@ void app_main() {
     xTaskCreatePinnedToCore(voltage_task, "Voltage Task", 2048, NULL, 2, NULL, 1);
     xTaskCreatePinnedToCore(reaction_wheel_task, "RW Task", 4096, NULL, 3, NULL, 1);
     xTaskCreatePinnedToCore(comms_task, "Comms Task", 4096, NULL, 4, NULL, 1);
+    
 }

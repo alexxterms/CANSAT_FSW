@@ -200,10 +200,6 @@ size_t build_signal_packet(uint8_t *buffer, int16_t rssi, uint8_t lq) {
     return 4; // Total bytes written
 }
 
-// Stub parser
-void comms_parser(const uint8_t *data, uint16_t length) {
-    // Implement later
-}
 
 void send_combined_packets() {
     uint8_t buffer[COMM_BUFFER_SIZE]; // Combined buffer
@@ -290,4 +286,66 @@ void send_combined_packets() {
 
     // Send the combined buffer over UART
     uart_write(buffer, index);
+}
+
+// Individual send functions implementation
+
+void send_identification_packet(const IdentificationPacket *packet) {
+    uint8_t buffer[64];
+    size_t packet_size = build_identification_packet(buffer, packet);
+    uart_write_bytes(UART_NUM_0, buffer, packet_size);
+}
+
+void send_environmental_packet(const EnvironmentalPacket *env_data) {
+    uint8_t buffer[32];
+    size_t packet_size = format_environmental_packet(buffer, (EnvironmentalPacket*)env_data);
+    uart_write_bytes(UART_NUM_0, buffer, packet_size);
+}
+
+void send_accel_packet(int16_t x_accel, int16_t y_accel, int16_t z_accel) {
+    uint8_t buffer[ACCEL_PACKET_SIZE];
+    size_t packet_size = build_accel_packet(buffer, x_accel, y_accel, z_accel);
+    uart_write_bytes(UART_NUM_0, buffer, packet_size);
+}
+
+void send_gyro_packet(int16_t x_rate, int16_t y_rate, int16_t z_rate) {
+    uint8_t buffer[GYRO_PACKET_SIZE];
+    size_t packet_size = build_gyro_packet(buffer, x_rate, y_rate, z_rate);
+    uart_write_bytes(UART_NUM_0, buffer, packet_size);
+}
+
+void send_gga_packet(uint8_t utc_time[3], float latitude, bool latitude_dir, float longitude, bool longitude_dir, uint8_t fix_status, uint16_t hdop, uint8_t satellites_used, int32_t altitude) {
+    uint8_t buffer[32];
+    size_t packet_size = build_gga_packet(buffer, utc_time, latitude, latitude_dir, longitude, longitude_dir, fix_status, hdop, satellites_used, altitude);
+    uart_write_bytes(UART_NUM_0, buffer, packet_size);
+}
+
+void send_gsv_packet(uint8_t satellites_in_view, satellite_info_t *satellite_data, int satellite_count) {
+    uint8_t buffer[256]; // Larger buffer for multiple satellites
+    size_t packet_size = build_gsv_packet(buffer, satellites_in_view, satellite_data, satellite_count);
+    uart_write_bytes(UART_NUM_0, buffer, packet_size);
+}
+
+void send_battery_packet(uint16_t current_voltage) {
+    uint8_t buffer[8];
+    size_t packet_size = build_battery_packet(buffer, current_voltage);
+    uart_write_bytes(UART_NUM_0, buffer, packet_size);
+}
+
+void send_system_status_packet(uint8_t sensor_status, uint32_t uptime, uint8_t mission_phase, const char *reboot_reason, uint8_t system_time[3]) {
+    uint8_t buffer[64];
+    size_t packet_size = build_system_status_packet(buffer, sensor_status, uptime, mission_phase, reboot_reason, system_time);
+    uart_write_bytes(UART_NUM_0, buffer, packet_size);
+}
+
+void send_pwm_packet(uint16_t servo_pwm[5], uint16_t esc_pwm[2]) {
+    uint8_t buffer[32];
+    size_t packet_size = build_pwm_packet(buffer, servo_pwm, esc_pwm);
+    uart_write_bytes(UART_NUM_0, buffer, packet_size);
+}
+
+void send_signal_packet(int16_t rssi, uint8_t lq) {
+    uint8_t buffer[8];
+    size_t packet_size = build_signal_packet(buffer, rssi, lq);
+    uart_write_bytes(UART_NUM_0, buffer, packet_size);
 }

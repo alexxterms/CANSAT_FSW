@@ -16,6 +16,16 @@
 #define MSG_ID_PWM 0x99
 #define MSG_ID_SIGNAL 0xA5
 
+#define MSG_ID_COMMAND 0xCC
+#define MSG_ID_ACTIVE_GUIDE 0xDD
+#define MSG_ID_DEPLOY_PARACHUTE 0xEE
+#define MSG_ID_DEPLOY_PARAGLIDER 0xFF
+#define MSG_ID_PREFLIGHT_CHECK 0xBA
+#define MSG_ID_CALIBRATE_SENSORS 0xBB
+#define MSG_ID_SET_MISSION_PHASE 0xBC
+#define MSG_ID_START_TELEMETRY 0xBD
+#define MSG_ID_SET_HOME 0xBE
+
 // Constants
 #define TEAM_ID_MAX_LEN 16
 #define COMM_BUFFER_SIZE 128
@@ -63,6 +73,19 @@ size_t build_battery_packet(uint8_t *buffer, uint16_t current_voltage);
 size_t build_system_status_packet(uint8_t *buffer, uint8_t sensor_status, uint32_t uptime, uint8_t mission_phase, const char *reboot_reason, uint8_t system_time[3]);
 size_t build_pwm_packet(uint8_t *buffer, uint16_t servo_pwm[5], uint16_t esc_pwm[2]);
 size_t build_signal_packet(uint8_t *buffer, int16_t rssi, uint8_t lq);
+
+// Individual send function declarations
+void send_identification_packet(const IdentificationPacket *packet);
+void send_environmental_packet(const EnvironmentalPacket *env_data);
+void send_accel_packet(int16_t x_accel, int16_t y_accel, int16_t z_accel);
+void send_gyro_packet(int16_t x_rate, int16_t y_rate, int16_t z_rate);
+void send_gga_packet(uint8_t utc_time[3], float latitude, bool latitude_dir, float longitude, bool longitude_dir, uint8_t fix_status, uint16_t hdop, uint8_t satellites_used, int32_t altitude);
+void send_gsv_packet(uint8_t satellites_in_view, satellite_info_t *satellite_data, int satellite_count);
+void send_battery_packet(uint16_t current_voltage);
+void send_system_status_packet(uint8_t sensor_status, uint32_t uptime, uint8_t mission_phase, const char *reboot_reason, uint8_t system_time[3]);
+void send_pwm_packet(uint16_t servo_pwm[5], uint16_t esc_pwm[2]);
+void send_signal_packet(int16_t rssi, uint8_t lq);
+
 void send_combined_packets();
 
 #endif // COMMUNICATIONS_H
