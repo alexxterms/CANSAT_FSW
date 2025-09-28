@@ -23,9 +23,9 @@
 #include "driver/uart.h" // Add this include for UART_NUM_0
 
 #include "ahrs.h"
-#include "mpu9250.h"
-#include "calibrate.h"
-#include "common.h"
+#include "bmx160.h"  // Changed from mpu9250.h
+// #include "calibrate.h"  // BMX160 has its own calibration functions
+// #include "common.h"     // Not needed for BMX160
 #include <math.h>  // Needed for M_PI
 #include "mics5524.h"
 #include "bmx280.h"
@@ -67,14 +67,14 @@ SensorData sensorData;
 static float previousAltitude = 0;
 
 
-// --------------------------------------------> MPU PROCESS STARTS HERE <--------------------------------------------------------
+// --------------------------------------------> IMU PROCESS STARTS HERE <--------------------------------------------------------
 
 #define I2C_MASTER_NUM I2C_NUM_0 /*!< I2C port number for master dev */
 #define SAMPLE_FREQ_Hz 100.0
 static const char *TAGM = "IMU_TASK";
 
-// pre-calibrated values that will be fed in mpu
-calibration_t cal = {
+// pre-calibrated values that will be fed to BMX160
+bmx160_calibration_t cal = {
     .mag_offset = {.x = 25.183594, .y = 57.519531, .z = -62.648438},
     .mag_scale = {.x = 1.513449, .y = 1.557811, .z = 1.434039},
     .accel_offset = {.x = 0.020900, .y = 0.014688, .z = -0.002580},
@@ -84,11 +84,10 @@ calibration_t cal = {
 };
 
 /**
- * Transformation:
- *  - Rotate around Z axis 180 degrees
- *  - Rotate around X axis -90 degrees
+ * Transformation functions for BMX160 orientation
+ * (you may need to adjust these based on your PCB layout)
  */
-static void transform_accel_gyro(vector_t *v)
+static void transform_accel_gyro(bmx160_vector_t *v)
 {
     float x = v->x;
     float y = v->y;
@@ -99,10 +98,7 @@ static void transform_accel_gyro(vector_t *v)
     v->z = -y;
 }
 
-/**
- * Transformation: to get magnetometer aligned
- */
-static void transform_mag(vector_t *v)
+static void transform_mag(bmx160_vector_t *v)
 {
     float x = v->x;
     float y = v->y;
@@ -113,32 +109,32 @@ static void transform_mag(vector_t *v)
     v->z = -x;
 }
 
-//main mpu process func
+//main BMX160 process func
 void run_imu(void)
 {
-    ESP_LOGI(TAGM, "Initializing IMU...");
-    ESP_ERROR_CHECK(i2c_mpu9250_init(&cal));
+    ESP_LOGI(TAGM, "Initializing BMX160...");
+    ESP_ERROR_CHECK(i2c_bmx160_init(&cal));
     ahrs_init(SAMPLE_FREQ_Hz, 0.8);
 
     uint64_t i = 0;
 
     while (true)
     {
-        vector_t va, vg, vm;
+        bmx160_vector_t va, vg, vm;
 
-        // Get the Accelerometer, Gyroscope and Magnetometer values.
+        // Get the Accelerometer, Gyroscope and Magnetometer values from BMX160
         if (get_accel_gyro_mag(&va, &vg, &vm) != ESP_OK)
         {
-            ESP_LOGE(TAGM, "Failed to read IMU data!");
+            ESP_LOGE(TAGM, "Failed to read BMX160 data!");
             continue;
         }
 
-        // Transform these values to the orientation of our device.
+        // Transform these values to the orientation of your device
         transform_accel_gyro(&va);
         transform_accel_gyro(&vg);
         transform_mag(&vm);
 
-        // Apply the AHRS algorithm, can we use kalman?????? cpu cost where???
+        // Apply the AHRS algorithm
         ahrs_update(DEG2RAD(vg.x), DEG2RAD(vg.y), DEG2RAD(vg.z),
                     va.x, va.y, va.z,
                     vm.x, vm.y, vm.z);
@@ -157,7 +153,7 @@ void run_imu(void)
         // Get Euler angles from AHRS
         ahrs_get_euler_in_degrees(&sensorData.yaw, &sensorData.pitch, &sensorData.roll);
 
-        // this gets temp, its not that good but lets see, probably will use bme temp
+        // Get temperature from BMX160
         if (get_temperature_celsius(&sensorData.temperature) != ESP_OK)
         {
             sensorData.temperature = -999;  // Error flag
@@ -170,24 +166,23 @@ void run_imu(void)
                      sensorData.yaw, sensorData.pitch, sensorData.roll, sensorData.temperature);
         }
 
-        vTaskDelay(pdMS_TO_TICKS(10)); // 100Hz samplingg 
+        vTaskDelay(pdMS_TO_TICKS(10)); // 100Hz sampling 
     }
 }
 
-// all the imu (mpu9250) process goes here
+// all the BMX160 (IMU) process goes here
 static void imu_task(void *arg) {
 #ifdef CONFIG_CALIBRATION_MODE
-    ESP_LOGI(TAGM, "Entering calibration mode...");
-    calibrate_gyro();
-    calibrate_accel();
-    calibrate_mag();
+    ESP_LOGI(TAGM, "Entering BMX160 calibration mode...");
+    bmx160_calibrate_gyro();
+    bmx160_calibrate_accel();
+    bmx160_calibrate_mag();
 #else
     run_imu();
 #endif
 
     // Cleanup resources before deleting the task
-    i2c_driver_delete(I2C_MASTER_NUM);
-    ESP_LOGI(TAGM, "IMU Task exited.");
+    ESP_LOGI(TAGM, "BMX160 Task exited.");
     vTaskDelete(NULL);
 }
 
@@ -344,89 +339,62 @@ void update_flight_state(float acceleration, float altitude, float velocity) {
 */
 /////FAKE
 
+// ----------------------------------------> ENHANCED DIFFERENTIAL COMMS TASK <-------------------------------------
+
 static const char *TAG_COMMS = "COMMS_TASK";
 
 void comms_task(void *pvParameters) {
-    uint8_t tx_buffer[512]; // Combined packet buffer
-    size_t tx_offset = 0;
-    uint16_t packet_counter = 0;
+    // Initialize both packet systems
+    packet_system_init();
+    differential_packet_init();
+    
+    uint32_t heartbeat_counter = 0;
+    uint32_t stats_counter = 0;
+    packet_context_t packet_stats;
+    uint32_t diff_total, diff_partial, diff_full, diff_bytes_saved;
+
+    ESP_LOGI(TAG_COMMS, "Enhanced differential communication system started");
 
     while (1) {
-        tx_offset = 0; // Reset offset for each new transmission
-
-        /* === Identification Packet === */
-        IdentificationPacket id_packet = {
-            .team_id = "TEAM1234",
-            .timestamp = esp_log_timestamp(),
-            .packet_id = packet_counter++,
-            .source = 0x01,
-            .destination = 0x02
-        };
-        tx_offset += build_identification_packet(&tx_buffer[tx_offset], &id_packet);
-
-        /* === Environmental Packet === */
-        EnvironmentalPacket env_packet = {
-            .message_id = MSG_ID_ENVIRONMENTAL,
-            .altitude    = (uint16_t)(sensorData.altitude * 10),   // dm
-            .temperature = (uint16_t)(sensorData.temperature * 100), // centi-degrees
-            .pressure    = (uint16_t)(sensorData.pressure / 10),   // deca-Pa
-            .humidity    = (uint16_t)(sensorData.humidity * 100),  // centi-%
-            .gas_sensor  = (uint16_t)(sensorData.gas_level * 100)  // scaled gas
-        };
-        tx_offset += format_environmental_packet(&tx_buffer[tx_offset], &env_packet);
-
-        /* === Accelerometer Packet === */
-        int16_t ax = (int16_t)(sensorData.ax * 1000); // milli-g
-        int16_t ay = (int16_t)(sensorData.ay * 1000);
-        int16_t az = (int16_t)(sensorData.az * 1000);
-        tx_offset += build_accel_packet(&tx_buffer[tx_offset], ax, ay, az);
-
-        /* === Gyroscope Packet === */
-        int16_t gx = (int16_t)(sensorData.gx * 1000); // milli-deg/s
-        int16_t gy = (int16_t)(sensorData.gy * 1000);
-        int16_t gz = (int16_t)(sensorData.gz * 1000);
-        tx_offset += build_gyro_packet(&tx_buffer[tx_offset], gx, gy, gz);
-
-        /* === GPS Data === */
-        gps_fix_t fix;
-        if (gps_get_fix(&fix)) {
-            /* === GGA Packet === */
-            uint8_t utc_time[3] = { fix.hh, fix.mm, fix.ss };
-            float latitude  = fix.lat_e7 / 1e7f;
-            float longitude = fix.lon_e7 / 1e7f;
-            bool lat_dir = (latitude >= 0);
-            bool lon_dir = (longitude >= 0);
-            uint8_t fix_status = fix.fix_quality;
-            uint16_t hdop = fix.hdop_x100 / 10;
-            uint8_t sats_used = fix.sats;
-            int32_t altitude_mm = fix.alt_cm * 10;
-
-            tx_offset += build_gga_packet(
-                &tx_buffer[tx_offset],
-                utc_time,
-                fabsf(latitude), lat_dir,
-                fabsf(longitude), lon_dir,
-                fix_status,
-                hdop,
-                sats_used,
-                altitude_mm
-            );
-
-            /* === GSV Packet with Satellite Data === */
-            satellite_info_t satellite_data[MAX_SATS];
-            int satellite_count = gps_get_satellites(satellite_data, MAX_SATS);
-            if (satellite_count > 0) {
-                tx_offset += build_gsv_packet(&tx_buffer[tx_offset], satellite_count, satellite_data, satellite_count);
-            }
+        // Send differential telemetry burst with real sensor data
+        esp_err_t ret = send_differential_telemetry_burst(&sensorData);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG_COMMS, "Failed to send differential telemetry: %s", esp_err_to_name(ret));
         }
 
-        /* === Send Combined Packets === */
-        // Send the buffer directly via UART
-        uart_write_bytes(UART_NUM_0, tx_buffer, tx_offset);
+        // Send heartbeat every 10 seconds (50 cycles at 200ms each)
+        if (++heartbeat_counter >= 50) {
+            ret = send_heartbeat_packet();
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG_COMMS, "Failed to send heartbeat: %s", esp_err_to_name(ret));
+            }
+            heartbeat_counter = 0;
+        }
 
-        ESP_LOGI(TAG_COMMS, "Sent %d bytes of telemetry", tx_offset);
+        // Log statistics every 30 seconds (150 cycles at 200ms each)
+        if (++stats_counter >= 150) {
+            // Log basic packet statistics
+            if (get_packet_stats(&packet_stats) == ESP_OK) {
+                ESP_LOGI(TAG_COMMS, "Basic Stats - Sent: %lu, Received: %lu, CRC Errors: %lu, Frame Errors: %lu",
+                         packet_stats.packets_sent, packet_stats.packets_received, 
+                         packet_stats.crc_errors, packet_stats.frame_errors);
+            }
+            
+            // Log differential packetization statistics
+            if (get_differential_stats(&diff_total, &diff_partial, &diff_full, &diff_bytes_saved) == ESP_OK) {
+                ESP_LOGI(TAG_COMMS, "Differential Stats - Total: %lu, Partial: %lu, Full: %lu, Bytes Saved: ~%lu",
+                         diff_total, diff_partial, diff_full, diff_bytes_saved);
+                
+                if (diff_total > 0) {
+                    float efficiency = ((float)diff_partial / diff_total) * 100.0f;
+                    ESP_LOGI(TAG_COMMS, "Efficiency: %.1f%% packets were differential (smaller)", efficiency);
+                }
+            }
+            
+            stats_counter = 0;
+        }
 
-        vTaskDelay(pdMS_TO_TICKS(1000)); // 1 Hz rate
+        vTaskDelay(pdMS_TO_TICKS(200)); // 5 Hz telemetry rate
     }
 }
 
