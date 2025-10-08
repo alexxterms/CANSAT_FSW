@@ -3,11 +3,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <string.h>
+#include <math.h> // Explicitly include math.h
 
 static const char *TAG = "PARAGLIDER";
 
-// Global navigation state
-static paraglider_nav_t g_nav_state = {0};
+// Global navigation state - use struct paraglider_nav directly instead of paraglider_nav_t
+static struct paraglider_nav g_nav_state = {0};
 static bool g_initialized = false;
 
 // Servo PWM duty calculation helper
@@ -113,18 +114,7 @@ esp_err_t paraglider_add_waypoint(const waypoint_t *waypoint) {
     return ESP_OK;
 }
 
-esp_err_t paraglider_update_position(double lat, double lon, float heading) {
-    if (!g_initialized) {
-        return ESP_ERR_INVALID_STATE;
-    }
-    
-    g_nav_state.current_position.latitude = lat;
-    g_nav_state.current_position.longitude = lon;
-    g_nav_state.current_heading_deg = heading;
-    
-    return ESP_OK;
-}
-
+// Remove the duplicate function and keep only the more complete version with altitude
 esp_err_t paraglider_update_position(double lat, double lon, float heading, float altitude) {
     if (!g_initialized) {
         return ESP_ERR_INVALID_STATE;
@@ -559,12 +549,13 @@ esp_err_t paraglider_stop_navigation(void) {
     return ret;
 }
 
+// Fix the return type to use the correct typedef
 esp_err_t paraglider_get_status(paraglider_nav_t *nav_status) {
     if (!g_initialized || !nav_status) {
         return ESP_ERR_INVALID_ARG;
     }
     
-    memcpy(nav_status, &g_nav_state, sizeof(paraglider_nav_t));
+    memcpy(nav_status, &g_nav_state, sizeof(struct paraglider_nav));
     return ESP_OK;
 }
 

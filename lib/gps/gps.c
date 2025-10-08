@@ -4,11 +4,9 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <math.h>
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
-
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
@@ -16,18 +14,11 @@
 static const char *TAG = "GPS";
 
 // Shared state
-static gps_fix_t g_fix;
+static struct gps_fix g_fix;
 static SemaphoreHandle_t g_fix_mux;
 
-#define MAX_SATS 32
-typedef struct {
-    int prn;
-    int elevation;
-    int azimuth;
-    int snr;
-} satellite_info_t;
-
-static satellite_info_t g_sats[MAX_SATS];
+// Use the satellite_info struct defined in gps.h
+static struct satellite_info g_sats[MAX_SATS];
 static int g_sats_in_view = 0;
 
 // ----------------- Helpers -----------------
@@ -220,7 +211,7 @@ static void parse_gga(char *payload) {
     uint16_t hdop_x100 = parse_hdop_x100(hdop_str);
     int32_t alt_cm = meters_to_cm(alt_str);
 
-    gps_fix_t tmp = {0};
+    struct gps_fix tmp = {0};
     tmp.valid       = (fix_quality > 0);
     tmp.hh          = hh;
     tmp.mm          = mm;
@@ -328,7 +319,7 @@ void gps_task(void *pvParameters) {
 
 // ----------------- API -----------------
 
-bool gps_get_fix(gps_fix_t *out) {
+bool gps_get_fix(struct gps_fix *out) {
     if (!out) return false;
     bool valid;
     if (g_fix_mux && xSemaphoreTake(g_fix_mux, pdMS_TO_TICKS(20)) == pdTRUE) {
@@ -344,17 +335,17 @@ bool gps_get_fix(gps_fix_t *out) {
 
 // Return number of satellites in view and copy info into provided buffer.
 // Returns actual count copied (<= max).
-int gps_get_satellites(satellite_info_t *out, int max) {
+int gps_get_satellites(struct satellite_info *out, int max) {
     if (!out || max <= 0) return 0;
     int copied = 0;
 
     if (g_fix_mux && xSemaphoreTake(g_fix_mux, pdMS_TO_TICKS(20)) == pdTRUE) {
         copied = (g_sats_in_view < max) ? g_sats_in_view : max;
-        memcpy(out, g_sats, copied * sizeof(satellite_info_t));
+        memcpy(out, g_sats, copied * sizeof(struct satellite_info));
         xSemaphoreGive(g_fix_mux);
     } else {
         copied = (g_sats_in_view < max) ? g_sats_in_view : max;
-        memcpy(out, g_sats, copied * sizeof(satellite_info_t));
+        memcpy(out, g_sats, copied * sizeof(struct satellite_info));
     }
 
     return copied;
@@ -364,7 +355,7 @@ int gps_get_satellites(satellite_info_t *out, int max) {
 esp_err_t gps_get_data(GPSData *data) {
     if (!data) return ESP_ERR_INVALID_ARG;
     
-    gps_fix_t fix;
+    struct gps_fix fix;
     bool valid = gps_get_fix(&fix);
     
     // Convert from gps_fix_t to GPSData format

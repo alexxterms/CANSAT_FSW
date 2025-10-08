@@ -304,16 +304,16 @@ esp_err_t bmx160_get_mag(bmx160_vector_t *mag) {
     return ESP_OK;
 }
 
-esp_err_t bmx160_get_accel_gyro_mag(bmx160_vector_t *accel, bmx160_vector_t *gyro, bmx160_vector_t *mag) {
+esp_err_t bmx160_get_accel_gyro_mag(bmx160_vector_t *va, bmx160_vector_t *vg, bmx160_vector_t *vm) {
     esp_err_t ret;
     
-    ret = bmx160_get_accel(accel);
+    ret = bmx160_get_accel(va);
     if (ret != ESP_OK) return ret;
     
-    ret = bmx160_get_gyro(gyro);
+    ret = bmx160_get_gyro(vg);
     if (ret != ESP_OK) return ret;
     
-    ret = bmx160_get_mag(mag);
+    ret = bmx160_get_mag(vm);
     return ret;
 }
 
@@ -335,26 +335,6 @@ esp_err_t bmx160_get_temperature_celsius(float *temperature) {
 // Compatibility functions with existing MPU9250 interface
 esp_err_t i2c_bmx160_init(const bmx160_calibration_t *cal) {
     return bmx160_init(I2C_NUM_0, cal);
-}
-
-esp_err_t get_accel_gyro_mag(bmx160_vector_t *va, bmx160_vector_t *vg, bmx160_vector_t *vm) {
-    return bmx160_get_accel_gyro_mag(va, vg, vm);
-}
-
-esp_err_t get_accel(bmx160_vector_t *v) {
-    return bmx160_get_accel(v);
-}
-
-esp_err_t get_gyro(bmx160_vector_t *v) {
-    return bmx160_get_gyro(v);
-}
-
-esp_err_t get_mag(bmx160_vector_t *v) {
-    return bmx160_get_mag(v);
-}
-
-esp_err_t get_temperature_celsius(float *val) {
-    return bmx160_get_temperature_celsius(val);
 }
 
 // Calibration functions (simplified versions)

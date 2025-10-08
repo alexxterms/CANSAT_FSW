@@ -11,16 +11,16 @@
 #define GPS_RX_BUF_BYTES  1024
 #define MAX_SATS 32
 
-// Satellite information structure
-typedef struct {
+// Satellite information structure - match the forward declaration in communications.h
+struct satellite_info {
     int prn;
     int elevation;
     int azimuth;
-    int snr;
-} satellite_info_t;
+    uint16_t snr;
+};
 
-// Latest GNSS fix, scaled for easy packing
-typedef struct {
+// Latest GNSS fix, scaled for easy packing - match the forward declaration in communications.h
+struct gps_fix {
     bool    valid;          // true if fix_quality > 0
     uint8_t hh, mm, ss;     // UTC time
     uint16_t ms;            // milliseconds (from .ss)
@@ -30,7 +30,7 @@ typedef struct {
     uint16_t hdop_x100;     // HDOP * 100
     uint8_t sats;           // satellites in use
     uint8_t fix_quality;    // 0=no fix, 1=GPS, 2=DGPS/RTK, etc
-} gps_fix_t;
+};
 
 // Compatibility typedef for main.c
 typedef struct {
@@ -49,10 +49,10 @@ typedef struct {
 void gps_task(void *pvParameters);
 
 // Copy latest fix (returns true if valid; out still filled even if false)
-bool gps_get_fix(gps_fix_t *out);
+bool gps_get_fix(struct gps_fix *out);
 
 // Get satellite information
-int gps_get_satellites(satellite_info_t *out, int max);
+int gps_get_satellites(struct satellite_info *out, int max);
 
 // Compatibility function for main.c
 esp_err_t gps_get_data(GPSData *data);

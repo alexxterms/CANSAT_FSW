@@ -89,7 +89,7 @@ typedef struct {
 } loiter_params_t;
 
 // Navigation state
-typedef struct {
+struct paraglider_nav {
     gps_coordinate_t current_position;
     gps_coordinate_t target_position;
     float current_heading_deg;
@@ -103,7 +103,10 @@ typedef struct {
     flight_state_t flight_state; // Current flight state
     loiter_params_t loiter;     // Loitering parameters
     paraglider_control_t control;
-} paraglider_nav_t;
+};
+
+// Add typedef for paraglider_nav to match function signatures
+typedef struct paraglider_nav paraglider_nav_t;
 
 // Function declarations
 
